@@ -1,0 +1,120 @@
+#!/bin/bash
+# vim: syntax=bash
+# On host
+# Resize image later: use qcow-tool resize https://github.com/canonical/multipass/issues/62
+
+set -x
+set -e 
+
+vm_etc="$HOME/multipass.d"
+vm_init_dir="$vm_etc/init.d"
+mkdir -p "$vm_init_dir"
+vm_state_dir="$vm_etc/vm.state"
+mkdir -p "£vm_state:dir"
+
+vm_name="backstage-labs"
+vm_cpu="2"
+vm_mem="2"
+vm_disk="10"
+vm_script="multipass-init"
+vm_reset="false"
+
+while (($#))
+do
+	case "$1" in
+		name)
+			shift
+			vm_name="$1"
+			;;
+		cpu)
+			shift
+			vm_cpu="$1"
+			;;
+		disk)
+			shift
+			vm_disk="$1"
+			;;
+		ram)
+			shift
+			vm_mem="$1"
+			;;
+		init)
+			shift
+			vm_script="$1"
+			;;
+		reset)
+			vm_reset="true"
+			;;
+		config)
+			shift
+			vm_etc="$(readlink -f $1)"
+			;;
+		list)
+			echo "Init scripts:"
+			find "${vm_init_dir}" -type f -print
+			exit 0
+			;;
+		help)
+			echo "$(basename $0) [name <vm_name>] [cpu <int>] [mem <GB RAM>] [disk <GB hdd>] [config <dir>] [reset] [help]"
+			echo "config <dir>: Looks for config and state in dir. <dir>/init.d for init script to run on init. <dir>/vm.state for tracking correct creation."
+			echo "reset: if created, delete and create again"
+		        echo "help: print this text and exit" 	
+			exit 0
+			;;
+		*)
+			echo "$1 not recognized, skipped"
+			shift
+	esac
+
+	shift
+done
+
+vm_init_dir="$vm_etc/init.d"
+mkdir -p "$vm_init_dir"
+vm_state_dir="$vm_etc/vm.state"
+mkdir -p "$vm_state_dir"
+vm_script="$(readlink -e "${vm_init_dir}/${vm_script}")" # fail if doesn't exist
+
+set +e
+multipass info "$vm_name" &>/dev/null
+vm_exists="$?"
+echo "vm exist? $vm_exists"
+set -e
+
+if [[ ! -f "${vm_state_dir}/${vm_name}.done" ]] && [[ "$vm_exists" == 0 ]] && [[ "$vm_reset" == "false" ]]
+then
+	read -p "VM seems off, recreate? (y/n)" -t 10
+	if [[ "$REPLY" == "y" ]]
+	then
+		vm_reset="true"
+	fi
+fi
+
+if [[ "$vm_reset" == "true" && "$vm_exists" == 0 ]]
+then
+	echo "Reinitializing exisintg vm ${vm_name}..."
+	multipass delete "${vm_name}"
+	multipass purge
+	vm_exists="1"
+fi
+
+if [[ "$vm_exists" != "0" ]] 
+then
+	echo "Trying to create new vm ${vm_name}..."
+	multipass launch --name "${vm_name}"  --cpus "${vm_cpu}" --mem "${vm_mem}G" --disk "${vm_disk}G"
+	multipass transfer "${vm_script}" "${vm_name}":"./$(basename ${vm_name})" 
+	multipass exec "${vm_name}" chmod +x "./$(basename ${vm_script})"
+	multipass exec "${vm_name}" "./$(basename ${vm_script})"
+	touch "${vm_state_dir}/${vm_name}.done"
+else
+	echo "$vm_name already exist..."
+fi
+
+echo "Opening vm shell"
+multipass shell "${vm_name}"
+
+# TODO:
+# https://backstage.io/docs/features/software-catalog/configuration
+# https://backstage.io/docs/auth/
+# https://multipass.run/docs/docker-tutorial for other stuff
+# https://andreipope.github.io/tutorials/create-a-cluster-with-multipass-and-k3s.html

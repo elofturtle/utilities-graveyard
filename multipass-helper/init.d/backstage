@@ -1,0 +1,38 @@
+#!/bin/bash
+if [[ "$1" == "noapt" ]]
+then
+	# Try to determine if recently updated?
+	#[[ -f var/log/apt/history.log ]] && [[ $(date -d  "$(cat /var/log/apt/history.log | tail -n 1 | sed  s'/End-Date: //g' | xargs | tr -s ' ')" +%s) -gt $(date -d '-1 hour'  +%s) ]] && {
+	sudo apt -y update;
+	sudo apt -y upgrade;
+	sudo apt -y install postgresql nodejs npm 
+	#}
+fi
+git config --global user.name elofturtle
+git config --global user.email "jonatan@osninja.se"
+wget  https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh --output-document=nvm-installer.sh 
+chmod +x nvm-installer.sh
+./nvm-installer.sh
+mkdir -p "$HOME/.npm-packages"
+echo 'export NPM_PACKAGES="$HOME/.npm-packages"' >> ~/.bashrc
+echo 'export PATH="$NPM_PACKAGES/bin:$PATH"' >> ~/.bashrc
+echo 'export NODE_PATH="$NPM_PACKAGES/lib/node_modules:$NODE_PATH"' >> ~/.bashrc
+echo 'export PATH="./node_modules/.bin:$HOME/node_modules/.bin:$PATH"' >> ~/.bashrc
+#echo "prefix = $NPM_PACKAGES" >> ~/.npmrc
+sleep 3
+source ~/.bashrc
+export PATH="./node_modules/.bin:$HOME/node_modules/.bin:$PATH"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+sleep 3
+nvm install --lts
+sleep 3
+nvm use --lts
+mkdir -p lab && cd lab
+npm install -g yarn 
+sleep 3
+npx @backstage/create-app <<< "my-first-backstage-app"
+sed -i "s/localhost:3000/$(hostname -I | grep -v 127 | head -n 1):3000/g" "$HOME/lab/my-first-backstage-app/app-config.yaml" # setting it to not localhost seems to allow incoming connections
+sleep 3
+cd foo && yarn dev
